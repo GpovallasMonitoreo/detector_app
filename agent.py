@@ -4,7 +4,7 @@ import time
 
 # --- CONFIGURACIÓN ---
 # La URL de tu aplicación en Render
-RENDER_URL = "https://detector-app-ok91.onrender.com/upload_frame" 
+RENDER_URL = "https://detector-app-ok91.onrender.com/upload_fram" 
 VIDEO_SOURCE = 0 # 0 para webcam, o tu URL RTSP
 
 cap = cv2.VideoCapture(VIDEO_SOURCE)
