@@ -10,89 +10,74 @@
     <div class="dashboard-container">
         <aside class="control-panel">
             <div class="logo"><h1>ARGOS</h1><span>MONITOR</span></div>
-            <section class="status-section">
-                <h3>ESTADO DEL SISTEMA</h3>
-                <ul id="status-list"></ul>
-            </section>
             <section class="controls-section">
-                <h3>CONTROLES</h3>
-                <div class="control-group">
+                <h3>AÑADIR CÁMARA</h3>
+                <form id="add-camera-form" class="control-group">
+                    <label for="camera-name">Nombre Descriptivo</label>
+                    <input type="text" id="camera-name" placeholder="Ej: Cámara Patio" required>
                     <label for="camera-url">URL de Cámara (RTSP)</label>
-                    <input type="text" id="camera-url" placeholder="rtsp://...">
-                    <button>Conectar</button>
-                </div>
-                <div class="control-group">
-                    <label for="reference-upload">Imágenes de Referencia</label>
-                    <input type="file" id="reference-upload" style="display: none;" accept="image/jpeg, image/png">
-                    <button class="upload-btn" onclick="document.getElementById('reference-upload').click();">
-                        Subir Referencia
-                    </button>
-                    <ul id="reference-list" class="reference-list">
-                        </ul>
-                </div>
+                    <input type="text" id="camera-url" placeholder="rtsp://..." required>
+                    <button type="submit">Añadir Cámara</button>
+                </form>
+            </section>
+            <section class="status-section">
+                <h3>CÁMARAS CONFIGURADAS</h3>
+                <ul id="camera-list" class="reference-list">
+                    </ul>
             </section>
         </aside>
 
         <main class="video-section">
             <header>
-                <h2>Video en Vivo - CAM 01</h2>
+                <h2>Video en Vivo</h2>
                 <div class="live-indicator-container"><div class="live-indicator"></div><span>LIVE</span></div>
             </header>
             <div class="video-container">
-                <img src="{{ url_for('video_feed') }}" alt="Stream de video no disponible. Asegúrate de que el agente local esté en ejecución.">
+                <img src="{{ url_for('video_feed') }}" alt="Esperando stream del agente local...">
             </div>
         </main>
     </div>
 
     <script>
-        // --- LÓGICA PARA ACTUALIZAR EL PANEL DE ESTADO ---
-        function updateStatus() {
-            fetch('/status')
-                .then(response => response.json())
-                .then(data => {
-                    const statusList = document.getElementById('status-list');
-                    statusList.innerHTML = '';
-                    for (const [key, value] of Object.entries(data)) {
-                        const [text, color] = value;
-                        const listItem = document.createElement('li');
-                        listItem.innerHTML = `<span>${key}</span><strong style="color: ${color};">${text}</strong>`;
-                        statusList.appendChild(listItem);
-                    }
-                })
-                .catch(error => console.error('Error al actualizar estado:', error));
+        const API_URL = '/api/cameras';
+        const cameraForm = document.getElementById('add-camera-form');
+        const cameraList = document.getElementById('camera-list');
+
+        // --- Carga las cámaras existentes al iniciar ---
+        async function loadCameras() {
+            const response = await fetch(API_URL);
+            const cameras = await response.json();
+            cameraList.innerHTML = '';
+            for (const cam_id in cameras) {
+                const camera = cameras[cam_id];
+                const item = document.createElement('li');
+                item.textContent = `${camera.name}: ${camera.url}`;
+                cameraList.appendChild(item);
+            }
         }
 
-        // --- NUEVA LÓGICA PARA LA SUBIDA DE ARCHIVOS ---
-        const fileInput = document.getElementById('reference-upload');
-        fileInput.addEventListener('change', (event) => {
-            const file = event.target.files[0];
-            if (!file) return;
+        // --- Envía el formulario para añadir una nueva cámara ---
+        cameraForm.addEventListener('submit', async (event) => {
+            event.preventDefault();
+            const name = document.getElementById('camera-name').value;
+            const url = document.getElementById('camera-url').value;
 
-            const formData = new FormData();
-            formData.append('reference_image', file);
-
-            fetch('/upload_reference', {
+            const response = await fetch(API_URL, {
                 method: 'POST',
-                body: formData
-            })
-            .then(response => response.json())
-            .then(data => {
-                if(data.success) {
-                    console.log('Archivo subido:', data.filename);
-                    const refList = document.getElementById('reference-list');
-                    const newItem = document.createElement('li');
-                    newItem.textContent = data.filename;
-                    refList.appendChild(newItem);
-                    updateStatus(); // Actualiza el panel para mostrar el nuevo conteo
-                } else {
-                    alert('Error al subir el archivo: ' + data.error);
-                }
-            })
-            .catch(error => console.error('Error en la subida:', error));
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ name, url })
+            });
+            const result = await response.json();
+
+            if(result.success) {
+                cameraForm.reset();
+                loadCameras(); // Recargar la lista
+            } else {
+                alert('Error al añadir la cámara: ' + result.error);
+            }
         });
 
-        setInterval(updateStatus, 2000);
-        window.onload = updateStatus;
+        window.onload = loadCameras;
     </script>
 </body>
 </html>
