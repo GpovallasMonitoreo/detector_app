@@ -1,0 +1,4 @@
+Flask
+gunicorn
+numpy
+opencv-python-headless  # Usamos la versión "headless" para servidores
