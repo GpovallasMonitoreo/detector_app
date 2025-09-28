@@ -6,76 +6,70 @@ import os
 
 app = Flask(__name__)
 
-# --- CONFIGURACIÓN ---
-UPLOAD_FOLDER = 'referencias'
-if not os.path.exists(UPLOAD_FOLDER):
-    os.makedirs(UPLOAD_FOLDER)
-
-# --- ALMACENAMIENTO EN MEMORIA Y PLACEHOLDER ---
-latest_frame = None
-# Creamos una imagen negra de "Señal Perdida" para mostrarla cuando haya errores
-placeholder_image = np.zeros((480, 640, 3), dtype=np.uint8)
-cv2.putText(placeholder_image, "SEÑAL PERDIDA DEL AGENTE", (50, 240), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
-
-status_data = {
-    "CONEXION": ("Esperando agente...", "#ffc107"),
-    "PANTALLA": ("Desconocido", "#6c757d"),
-    "IMAGEN": ("N/A", "#6c757d"),
-    "REFERENCIAS": (f"{len(os.listdir(UPLOAD_FOLDER))} cargadas", "#6c757d")
-}
+# --- CONFIGURACIÓN Y "BASE DE DATOS" EN MEMORIA ---
+# En una app real, esto estaría en una base de datos como PostgreSQL o Redis.
+# Por ahora, un diccionario en memoria es suficiente.
+cameras_db = {} # Guardará la configuración de las cámaras. Ej: {"cam_1": "rtsp://..."}
+latest_frames = {} # Guardará el último frame recibido de cada cámara.
 
 @app.route('/')
 def index():
+    """Sirve la página principal de la interfaz."""
     return render_template('index.html')
 
+# --- API PARA LA INTERFAZ WEB ---
+@app.route('/api/cameras', methods=['GET', 'POST'])
+def manage_cameras():
+    """Permite a la interfaz web ver y añadir cámaras."""
+    if request.method == 'POST':
+        data = request.json
+        if not data or 'name' not in data or 'url' not in data:
+            return jsonify(success=False, error="Datos incompletos"), 400
+        
+        cam_id = f"cam_{len(cameras_db) + 1}"
+        cameras_db[cam_id] = {'name': data['name'], 'url': data['url']}
+        print(f"Cámara añadida: {cameras_db[cam_id]}")
+        return jsonify(success=True, camera=cameras_db[cam_id])
+
+    # Para el método GET, simplemente devolvemos la lista de cámaras
+    return jsonify(cameras_db)
+
+# --- API PARA EL AGENTE LOCAL ---
+@app.route('/api/agent/config')
+def get_agent_config():
+    """El agente local llamará a esta ruta para saber a qué cámara conectarse."""
+    # Para esta demo, el agente siempre controlará la primera cámara de la lista.
+    if cameras_db:
+        first_cam_id = list(cameras_db.keys())[0]
+        return jsonify(cameras_db[first_cam_id])
+    return jsonify({}) # Devuelve un objeto vacío si no hay cámaras configuradas
+
+# --- RUTAS DE VIDEO (Ligeramente modificadas) ---
 @app.route('/upload_frame', methods=['POST'])
 def upload_frame():
-    global latest_frame, status_data
+    """Recibe un frame del agente local."""
+    global latest_frames
     try:
+        cam_id = request.form.get('cam_id', 'cam_1') # Asumimos cam_1 si no se especifica
         image_file = request.files['frame']
         image_data = np.frombuffer(image_file.read(), np.uint8)
-        
-        # --- PUNTO DE DIAGNÓSTICO CLAVE ---
-        decoded_frame = cv2.imdecode(image_data, cv2.IMREAD_COLOR)
-        
-        if decoded_frame is None:
-            # Si la decodificación falla, lo imprimimos en los logs de Render
-            print("ERROR CRITICO: cv2.imdecode fallo y no pudo decodificar la imagen recibida.")
-            return jsonify(success=False, error="imdecode failed")
-        
-        latest_frame = decoded_frame
-        status_data["CONEXION"] = ("Recibiendo", "#28a745")
+        latest_frames[cam_id] = cv2.imdecode(image_data, cv2.IMREAD_COLOR)
         return jsonify(success=True)
-        
     except Exception as e:
-        status_data["CONEXION"] = ("Error en Servidor", "#dc3545")
-        # Imprimimos cualquier otro error para poder verlo en los logs
-        print(f"Error en /upload_frame: {e}")
+        print(f"Error al recibir el frame: {e}")
         return jsonify(success=False, error=str(e))
 
-@app.route('/upload_reference', methods=['POST'])
-def upload_reference():
-    # ... (Esta función no necesita cambios) ...
-    global status_data
-    if 'reference_image' not in request.files: return jsonify(success=False, error="No se encontró el archivo")
-    file = request.files['reference_image']
-    if file.filename == '': return jsonify(success=False, error="No se seleccionó ningún archivo")
-    if file:
-        filename = file.filename; filepath = os.path.join(UPLOAD_FOLDER, filename); file.save(filepath)
-        print(f"Nueva referencia guardada: {filename}")
-        status_data["REFERENCIAS"] = (f"{len(os.listdir(UPLOAD_FOLDER))} cargadas", "#28a745")
-        return jsonify(success=True, filename=filename)
-
-def frame_generator():
+def frame_generator(cam_id='cam_1'):
+    """Generador que sirve el último frame de una cámara específica."""
+    placeholder_image = np.zeros((480, 640, 3), dtype=np.uint8)
+    cv2.putText(placeholder_image, "Esperando Stream...", (50, 240), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2)
+    
     while True:
-        frame_to_send = None
-        if latest_frame is not None:
-            frame_to_send = latest_frame
-        else:
-            # Si no hay un frame válido, enviamos nuestra imagen de "Señal Perdida"
-            frame_to_send = placeholder_image
-
-        (flag, encodedImage) = cv2.imencode(".jpg", frame_to_send)
+        frame = latest_frames.get(cam_id)
+        if frame is None:
+            frame = placeholder_image
+        
+        (flag, encodedImage) = cv2.imencode(".jpg", frame)
         if flag:
             yield(b'--frame\r\n' b'Content-Type: image/jpeg\r\n\r\n' + 
                   bytearray(encodedImage) + b'\r\n')
@@ -83,8 +77,5 @@ def frame_generator():
 
 @app.route('/video_feed')
 def video_feed():
+    """La ruta que sirve el stream de video a la interfaz."""
     return Response(frame_generator(), mimetype='multipart/x-mixed-replace; boundary=frame')
-
-@app.route('/status')
-def status():
-    return jsonify(status_data)
