@@ -8,19 +8,12 @@
 </head>
 <body>
     <div class="dashboard-container">
-        
         <aside class="control-panel">
-            <div class="logo">
-                <h1>ARGOS</h1>
-                <span>MONITOR</span>
-            </div>
-            
+            <div class="logo"><h1>ARGOS</h1><span>MONITOR</span></div>
             <section class="status-section">
                 <h3>ESTADO DEL SISTEMA</h3>
-                <ul id="status-list">
-                    </ul>
+                <ul id="status-list"></ul>
             </section>
-
             <section class="controls-section">
                 <h3>CONTROLES</h3>
                 <div class="control-group">
@@ -29,16 +22,13 @@
                     <button>Conectar</button>
                 </div>
                 <div class="control-group">
-                    <label>Imágenes de Referencia</label>
-                    <button class="upload-btn">Subir Referencia</button>
-                    <ul class="reference-list">
-                        <li>anuncio_1.jpg</li>
-                        <li>anuncio_2.png</li>
-                    </ul>
-                </div>
-                 <div class="control-group">
-                    <label>Área de Detección (ROI)</label>
-                    <button>Definir ROI en Video</button>
+                    <label for="reference-upload">Imágenes de Referencia</label>
+                    <input type="file" id="reference-upload" style="display: none;" accept="image/jpeg, image/png">
+                    <button class="upload-btn" onclick="document.getElementById('reference-upload').click();">
+                        Subir Referencia
+                    </button>
+                    <ul id="reference-list" class="reference-list">
+                        </ul>
                 </div>
             </section>
         </aside>
@@ -46,19 +36,16 @@
         <main class="video-section">
             <header>
                 <h2>Video en Vivo - CAM 01</h2>
-                <div class="live-indicator-container">
-                    <div class="live-indicator"></div>
-                    <span>LIVE</span>
-                </div>
+                <div class="live-indicator-container"><div class="live-indicator"></div><span>LIVE</span></div>
             </header>
             <div class="video-container">
-                <img src="{{ url_for('video_feed') }}" alt="Stream de video no disponible.">
+                <img src="{{ url_for('video_feed') }}" alt="Stream de video no disponible. Asegúrate de que el agente local esté en ejecución.">
             </div>
         </main>
-
     </div>
 
     <script>
+        // --- LÓGICA PARA ACTUALIZAR EL PANEL DE ESTADO ---
         function updateStatus() {
             fetch('/status')
                 .then(response => response.json())
@@ -74,6 +61,36 @@
                 })
                 .catch(error => console.error('Error al actualizar estado:', error));
         }
+
+        // --- NUEVA LÓGICA PARA LA SUBIDA DE ARCHIVOS ---
+        const fileInput = document.getElementById('reference-upload');
+        fileInput.addEventListener('change', (event) => {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            const formData = new FormData();
+            formData.append('reference_image', file);
+
+            fetch('/upload_reference', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                if(data.success) {
+                    console.log('Archivo subido:', data.filename);
+                    const refList = document.getElementById('reference-list');
+                    const newItem = document.createElement('li');
+                    newItem.textContent = data.filename;
+                    refList.appendChild(newItem);
+                    updateStatus(); // Actualiza el panel para mostrar el nuevo conteo
+                } else {
+                    alert('Error al subir el archivo: ' + data.error);
+                }
+            })
+            .catch(error => console.error('Error en la subida:', error));
+        });
+
         setInterval(updateStatus, 2000);
         window.onload = updateStatus;
     </script>
