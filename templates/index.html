@@ -3,44 +3,78 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Monitor de Pantalla</title>
+    <title>Dashboard de Monitoreo</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
 </head>
 <body>
-    <div class="container">
-        <header>
-            <h1>MONITOR DE PANTALLA</h1>
-            <div class="live-indicator"></div>
-        </header>
-        <main>
-            <div class="video-container">
-                <img src="{{ url_for('video_feed') }}" width="100%">
+    <div class="dashboard-container">
+        
+        <aside class="control-panel">
+            <div class="logo">
+                <h1>ARGOS</h1>
+                <span>MONITOR</span>
             </div>
-            <div class="status-panel">
-                <h2>PANEL DE ESTADO</h2>
+            
+            <section class="status-section">
+                <h3>ESTADO DEL SISTEMA</h3>
                 <ul id="status-list">
                     </ul>
+            </section>
+
+            <section class="controls-section">
+                <h3>CONTROLES</h3>
+                <div class="control-group">
+                    <label for="camera-url">URL de Cámara (RTSP)</label>
+                    <input type="text" id="camera-url" placeholder="rtsp://...">
+                    <button>Conectar</button>
+                </div>
+                <div class="control-group">
+                    <label>Imágenes de Referencia</label>
+                    <button class="upload-btn">Subir Referencia</button>
+                    <ul class="reference-list">
+                        <li>anuncio_1.jpg</li>
+                        <li>anuncio_2.png</li>
+                    </ul>
+                </div>
+                 <div class="control-group">
+                    <label>Área de Detección (ROI)</label>
+                    <button>Definir ROI en Video</button>
+                </div>
+            </section>
+        </aside>
+
+        <main class="video-section">
+            <header>
+                <h2>Video en Vivo - CAM 01</h2>
+                <div class="live-indicator-container">
+                    <div class="live-indicator"></div>
+                    <span>LIVE</span>
+                </div>
+            </header>
+            <div class="video-container">
+                <img src="{{ url_for('video_feed') }}" alt="Stream de video no disponible.">
             </div>
         </main>
+
     </div>
+
     <script>
         function updateStatus() {
             fetch('/status')
                 .then(response => response.json())
                 .then(data => {
                     const statusList = document.getElementById('status-list');
-                    statusList.innerHTML = ''; // Limpiar la lista
+                    statusList.innerHTML = '';
                     for (const [key, value] of Object.entries(data)) {
                         const [text, color] = value;
                         const listItem = document.createElement('li');
-                        listItem.innerHTML = `<strong>${key}:</strong> <span style="color: ${color};">${text}</span>`;
+                        listItem.innerHTML = `<span>${key}</span><strong style="color: ${color};">${text}</strong>`;
                         statusList.appendChild(listItem);
                     }
-                });
+                })
+                .catch(error => console.error('Error al actualizar estado:', error));
         }
-        // Actualizar el estado cada 2 segundos
         setInterval(updateStatus, 2000);
-        // Cargar el estado al iniciar la página
         window.onload = updateStatus;
     </script>
 </body>
