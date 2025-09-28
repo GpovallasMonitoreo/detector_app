@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Monitor de Pantalla</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>MONITOR DE PANTALLA</h1>
+            <div class="live-indicator"></div>
+        </header>
+        <main>
+            <div class="video-container">
+                <img src="{{ url_for('video_feed') }}" width="100%">
+            </div>
+            <div class="status-panel">
+                <h2>PANEL DE ESTADO</h2>
+                <ul id="status-list">
+                    </ul>
+            </div>
+        </main>
+    </div>
+    <script>
+        function updateStatus() {
+            fetch('/status')
+                .then(response => response.json())
+                .then(data => {
+                    const statusList = document.getElementById('status-list');
+                    statusList.innerHTML = ''; // Limpiar la lista
+                    for (const [key, value] of Object.entries(data)) {
+                        const [text, color] = value;
+                        const listItem = document.createElement('li');
+                        listItem.innerHTML = `<strong>${key}:</strong> <span style="color: ${color};">${text}</span>`;
+                        statusList.appendChild(listItem);
+                    }
+                });
+        }
+        // Actualizar el estado cada 2 segundos
+        setInterval(updateStatus, 2000);
+        // Cargar el estado al iniciar la página
+        window.onload = updateStatus;
+    </script>
+</body>
+</html>
